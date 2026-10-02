@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#3b82f6">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>لعبة أبطال الرياضيات - إعداد مستر هاني شكري حجازي</title>
+    <!-- استدعاء خطوط جوجل (Cairo) لدعم اللغة العربية بشكل جميل -->
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+    <!-- استدعاء مكتبة Tailwind CSS للتصميم -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- استدعاء مكتبة Confetti للاحتفال في النهاية -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    
+    <style>
+        html, body {
+            overflow-x: hidden;
+            -webkit-text-size-adjust: 100%;
+        }
+        body {
+            font-family: 'Cairo', sans-serif;
+            background-color: #e0f2fe;
+            background-image: radial-gradient(#bae6fd 2px, transparent 2px);
+            background-size: 30px 30px;
+            overscroll-behavior-y: contain;
+            padding-top: env(safe-area-inset-top);
+            padding-bottom: env(safe-area-inset-bottom);
+        }
+        /* عناصر قابلة للضغط (أفضل تجربة على اللمس) */
+        button, .btn-option {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn-option {
+            transition: all 0.2s ease;
+            min-height: 56px; /* هدف لمس مريح */
+            word-break: break-word;
+        }
+        .btn-option:hover:not(:disabled) {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        .btn-option:active:not(:disabled) {
+            transform: translateY(-1px) scale(0.99);
+        }
+        .btn-option:disabled {
+            cursor: not-allowed;
+            opacity: 0.85;
+        }
+        .btn-option .key-hint {
+            display: inline-block;
+            background: #dbeafe;
+            color: #1d4ed8;
+            font-weight: 900;
+            border-radius: 9999px;
+            padding: 2px 10px;
+            margin-left: 10px;
+            font-size: 0.85em;
+            flex-shrink: 0;
+        }
+        .correct {
+            background-color: #22c55e !important;
+            color: white !important;
+            border-color: #16a34a !important;
+        }
+        .correct .key-hint { background: #16a34a; color: #ffffff; }
+        .wrong {
+            background-color: #ef4444 !important;
+            color: white !important;
+            border-color: #dc2626 !important;
+        }
+        .wrong .key-hint { background: #dc2626; color: #ffffff; }
+        .shake {
+            animation: shake 0.5s;
+        }
+        @keyframes shake {
+            0% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            50% { transform: translateX(5px); }
+            75% { transform: translateX(-5px); }
+            100% { transform: translateX(0); }
+        }
+        .fade-in {
+            animation: fadeIn 0.4s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        .pulse-badge {
+            animation: pulseBadge 1.5s ease-in-out infinite;
+        }
+        @keyframes pulseBadge {
+            0%, 100% { transform: scale(1); }
+            50%      { transform: scale(1.06); }
+        }
+
+        /* ===== تحسينات شاشات الجوال ===== */
+        @media (max-width: 640px) {
+            body { padding: 0.5rem; align-items: stretch; }
+            .app-card {
+                border-width: 2px !important;
+                border-radius: 1.25rem !important;
+            }
+            .btn-option {
+                font-size: 1.05rem !important;
+                padding: 0.9rem 1rem !important;
+                border-radius: 1rem !important;
+            }
+            .btn-option .key-hint {
+                padding: 2px 8px;
+                margin-left: 6px;
+                font-size: 0.8em;
+            }
+            #question-text {
+                font-size: 1.2rem !important;
+                line-height: 1.6 !important;
+                margin-bottom: 1.25rem !important;
+            }
+            #options-container { gap: 0.6rem !important; }
+        }
+        /* شاشات صغيرة جداً */
+        @media (max-width: 380px) {
+            .btn-option { font-size: 0.95rem !important; min-height: 52px; }
+            #question-text { font-size: 1.05rem !important; }
+        }
+        /* ارتفاع منخفض (الجوال في الوضع الأفقي) */
+        @media (max-height: 500px) and (orientation: landscape) {
+            body { align-items: flex-start; }
+            #start-screen, #result-screen { padding: 1rem !important; }
+            #options-container {
+                grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+                gap: 0.5rem !important;
+            }
+            .btn-option { padding: 0.6rem 0.8rem !important; min-height: 48px; font-size: 0.95rem !important; }
+            #question-text { font-size: 1.1rem !important; margin-bottom: 0.75rem !important; }
+        }
+    </style>
+</head>
+<body class="min-h-screen flex items-center justify-center p-2 sm:p-4">
+
+    <!-- الحاوية الرئيسية -->
+    <div class="app-card bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden border-2 sm:border-4 border-blue-400">
+        
+        <!-- الشاشة الرئيسية (شاشة البداية) -->
+        <div id="start-screen" class="p-5 sm:p-8 text-center flex flex-col items-center justify-center space-y-4 sm:space-y-6">
+            <h1 class="text-3xl sm:text-4xl md:text-5xl font-black text-blue-600 mb-2 sm:mb-4 drop-shadow-md">🌟 أبطال الرياضيات 🌟</h1>
+            <p class="text-lg sm:text-xl text-gray-600 font-bold">للصف الثالث الابتدائي</p>
+            
+            <div class="relative w-32 h-32 sm:w-40 sm:h-40 md:w-48 md:h-48 rounded-full border-4 sm:border-8 border-yellow-400 shadow-xl overflow-hidden my-2 sm:my-4 bg-gray-100">
+                <!-- صورة المعلم -->
+                <img src="./assets/asset.jpg" alt="مستر هاني شكري حجازي" class="w-full h-full object-cover" loading="lazy">
+            </div>
+            
+            <div class="bg-yellow-100 px-4 sm:px-6 py-2 sm:py-3 rounded-full border-2 border-yellow-400 text-yellow-800 font-bold text-base sm:text-lg md:text-xl shadow-sm max-w-full">
+                إعداد المعلم المبدع: مستر هاني شكري حجازي
+            </div>
+
+            <p class="text-gray-500 mt-2 sm:mt-4 text-sm sm:text-base px-2">هل أنت مستعد لاختبار ذكائك في جدول الضرب والمصفوفات؟ 🚀</p>
+            
+            <button onclick="startGame()" class="mt-4 sm:mt-8 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold py-3 sm:py-4 px-8 sm:px-12 rounded-full text-xl sm:text-2xl shadow-lg transform transition hover:scale-110 active:scale-95">
+                ابدأ اللعب الآن 🎮
+            </button>
+        </div>
+
+        <!-- شاشة الأسئلة -->
+        <div id="quiz-screen" class="hidden flex-col h-full">
+            <!-- شريط التقدم والمعلومات -->
+            <div class="bg-blue-500 text-white p-3 sm:p-4 flex flex-wrap gap-2 justify-between items-center shadow-md rounded-b-2xl sm:rounded-b-3xl mb-4 sm:mb-6 mx-1 sm:mx-2">
+                <div class="font-bold text-sm sm:text-lg bg-blue-600 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full">
+                    السؤال: <span id="question-number">1</span> / 20
+                </div>
+                <div id="score-badge" class="font-bold text-sm sm:text-lg bg-yellow-400 text-yellow-900 px-3 sm:px-4 py-1.5 sm:py-2 rounded-full flex items-center">
+                    ⭐ النقاط: <span id="score" class="mr-2">0</span>
+                </div>
+            </div>
+
+            <!-- شريط التقدم المرئي -->
+            <div class="w-full bg-gray-200 h-2.5 mb-4 sm:mb-6">
+                <div id="progress-bar" class="bg-yellow-400 h-2.5 transition-all duration-300" style="width: 0%"></div>
+            </div>
+
+            <!-- حاوية السؤال -->
+            <div class="p-4 sm:p-6 flex-grow flex flex-col justify-center">
+                <h2 id="question-text" class="text-xl sm:text-2xl md:text-3xl font-bold text-center text-gray-800 mb-5 sm:mb-8 leading-relaxed">
+                    نص السؤال يظهر هنا
+                </h2>
+
+                <!-- الخيارات -->
+                <div id="options-container" class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <!-- سيتم إضافة الأزرار هنا بواسطة الجافاسكربت -->
+                </div>
+            </div>
+        </div>
+
+        <!-- شاشة النتيجة -->
+        <div id="result-screen" class="hidden p-5 sm:p-8 text-center flex-col items-center justify-center space-y-4 sm:space-y-6">
+            <div class="text-6xl sm:text-7xl mb-2 sm:mb-4" id="result-emoji">🏆</div>
+            <h2 class="text-3xl sm:text-4xl font-black text-blue-600">انتهت اللعبة!</h2>
+            <p class="text-xl sm:text-2xl text-gray-700 font-bold">نتيجتك هي:</p>
+            <div class="text-5xl sm:text-6xl font-black text-yellow-500 my-2 sm:my-4 drop-shadow-md">
+                <span id="final-score">0</span> / 20
+            </div>
+            
+            <p id="result-message" class="text-base sm:text-xl font-bold text-green-600 bg-green-50 px-4 sm:px-6 py-3 sm:py-4 rounded-2xl border-2 border-green-200 max-w-full"></p>
+
+            <div class="bg-purple-50 px-4 sm:px-6 py-2 rounded-full border border-purple-200 text-purple-800 font-bold text-sm sm:text-base">
+                🏅 أفضل نتيجة لك: <span id="best-score">0</span> / 20
+            </div>
+
+            <div class="bg-blue-50 px-4 sm:px-6 py-2 sm:py-3 rounded-full border border-blue-200 text-blue-800 font-bold mt-2 sm:mt-4 text-sm sm:text-base">
+                مع تحيات: مستر هاني شكري حجازي 👨‍🏫
+            </div>
+
+            <button onclick="restartGame()" class="mt-4 sm:mt-8 bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-bold py-3 px-6 sm:px-8 rounded-full text-lg sm:text-xl shadow-lg transform transition hover:scale-105 active:scale-95">
+                العب مرة أخرى 🔄
+            </button>
+        </div>
+
+    </div>
+
+    <!-- كود الجافاسكربت لتشغيل اللعبة -->
+    <script>
+        // --- 1. إعداد مؤثرات الصوت (Web Audio API) ---
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new AudioContext();
+            }
+        }
+
+        function playSound(isCorrect) {
+            if (!audioCtx) return;
+            const oscillator = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            if (isCorrect) {
+                // صوت إجابة صحيحة (نغمة سعيدة)
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+                oscillator.frequency.setValueAtTime(659.25, audioCtx.currentTime + 0.1); // E5
+                oscillator.frequency.setValueAtTime(783.99, audioCtx.currentTime + 0.2); // G5
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.4);
+            } else {
+                // صوت إجابة خاطئة (نغمة حزينة)
+                oscillator.type = 'sawtooth';
+                oscillator.frequency.setValueAtTime(300, audioCtx.currentTime);
+                oscillator.frequency.exponentialRampToValueAtTime(150, audioCtx.currentTime + 0.4);
+                gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.4);
+            }
+        }
+
+        // --- 2. الأسئلة (20 سؤال من ملف المتطلبات القبلية) ---
+        const questions = [
+            // أسئلة الجمع المتكرر ومفهوم الضرب
+            { q: "ما هي مسألة الضرب التي تعبر عن الجمع المتكرر: 3 + 3 + 3 + 3 = 12 ؟", options: ["4 × 3 = 12", "3 × 3 = 9", "4 + 3 = 7", "4 × 4 = 16"], answer: 0 },
+            { q: "الجمع المتكرر 5 + 5 + 5 يعبر عن مسألة الضرب:", options: ["3 × 3", "5 × 5", "3 × 5", "5 × 4"], answer: 2 },
+            { q: "اشترى أحمد 4 علب ألوان، كل علبة بها 5 أقلام. ما هو العدد الكلي للأقلام؟", options: ["9 أقلام", "16 قلماً", "25 قلماً", "20 قلماً"], answer: 3 },
+            { q: "سلة بها 6 تفاحات، فما عدد التفاح في 3 سلال متماثلة؟", options: ["18 تفاحة", "9 تفاحات", "12 تفاحة", "24 تفاحة"], answer: 0 },
+            
+            // أسئلة المصفوفات
+            { q: "مصفوفة تتكون من 3 صفوف و 4 أعمدة، كم عدد عناصرها؟", options: ["7", "12", "16", "9"], answer: 1 },
+            { q: "مصفوفة بها 5 صفوف، وكل صف به كرتان (2). ما اسم هذه المصفوفة؟", options: ["مصفوفة 5 × 2", "مصفوفة 2 × 5", "مصفوفة 5 × 5", "مصفوفة 2 × 2"], answer: 0 },
+            { q: "لحساب عدد عناصر المصفوفة نضرب عدد (...) في عدد الأعمدة.", options: ["الخلايا", "الصفوف", "المجموعات", "الأرقام"], answer: 1 },
+            { q: "مصفوفة 4 × 4، كم عدد عناصرها الكلي؟", options: ["8", "12", "16", "20"], answer: 2 },
+
+            // خاصية الإبدال
+            { q: "حسب خاصية الإبدال في الضرب: 4 × 6 تساوي...", options: ["6 × 4", "4 + 6", "6 × 6", "4 × 4"], answer: 0 },
+            { q: "أكمل لتتحقق خاصية الإبدال: 7 × 5 = 5 × ...", options: ["5", "7", "12", "35"], answer: 1 },
+            { q: "أي من المسائل الآتية يمثل خاصية الإبدال؟", options: ["3 × 2 = 6", "2 + 8 = 8 + 2", "4 × 9 = 9 × 4", "1 × 5 = 5"], answer: 2 },
+            { q: "هل يتغير ناتج الضرب عند تبديل ترتيب الأعداد (مثل 2×3 و 3×2)؟", options: ["نعم يتغير دائماً", "لا يتغير (الناتج نفسه)", "يتغير أحياناً", "لا يمكن المعرفة"], answer: 1 },
+
+            // جداول الضرب المتنوعة
+            { q: "كم يساوي 5 × 8 ؟", options: ["40", "45", "35", "30"], answer: 0 },
+            { q: "كم يساوي 9 × 3 ؟", options: ["24", "21", "27", "30"], answer: 2 },
+            { q: "ما ناتج 7 × 7 ؟", options: ["42", "49", "35", "56"], answer: 1 },
+            { q: "أي عدد نضربه في 1 يكون الناتج...", options: ["صفر", "10", "العدد نفسه", "1"], answer: 2 },
+            { q: "ما ناتج 10 × 6 ؟", options: ["16", "60", "66", "100"], answer: 1 },
+            { q: "الرقم الناقص: ... × 4 = 32", options: ["6", "7", "8", "9"], answer: 2 },
+            { q: "ما ناتج 0 × 9 ؟", options: ["9", "90", "1", "صفر"], answer: 3 },
+            { q: "4 مجموعات من 4 نجوم، تساوي كم نجمة في الكلي؟", options: ["8", "12", "16", "20"], answer: 2 }
+        ];
+
+        // --- 3. متغيرات اللعبة ---
+        let currentQuestionIndex = 0;
+        let score = 0;
+        let isAnswered = false;
+        let shuffledQuestions = [];
+
+        // --- 4. وظائف اللعبة ---
+
+        function shuffle(array) {
+            const arr = array.slice();
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        function startGame() {
+            initAudio(); // تهيئة الصوت عند أول تفاعل للمستخدم
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('result-screen').classList.add('hidden');
+            document.getElementById('result-screen').classList.remove('flex');
+            document.getElementById('quiz-screen').classList.remove('hidden');
+            document.getElementById('quiz-screen').classList.add('flex');
+
+            currentQuestionIndex = 0;
+            score = 0;
+            shuffledQuestions = shuffle(questions);
+            updateScoreDisplay();
+            loadQuestion();
+        }
+
+        function loadQuestion() {
+            isAnswered = false;
+            const q = shuffledQuestions[currentQuestionIndex];
+
+            // تحديث العداد وشريط التقدم
+            document.getElementById('question-number').innerText = currentQuestionIndex + 1;
+            const progress = (currentQuestionIndex / shuffledQuestions.length) * 100;
+            document.getElementById('progress-bar').style.width = `${progress}%`;
+
+            // عرض السؤال مع تأثير ظهور
+            const questionEl = document.getElementById('question-text');
+            questionEl.innerText = q.q;
+            questionEl.classList.remove('fade-in');
+            void questionEl.offsetWidth; // إعادة تشغيل الأنيميشن
+            questionEl.classList.add('fade-in');
+
+            // مسح وعرض الخيارات
+            const optionsContainer = document.getElementById('options-container');
+            optionsContainer.innerHTML = '';
+
+            q.options.forEach((option, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'btn-option fade-in w-full bg-white border-2 border-blue-200 text-blue-700 hover:bg-blue-50 font-bold py-3 sm:py-4 px-4 sm:px-6 rounded-xl sm:rounded-2xl text-lg sm:text-xl md:text-2xl text-right shadow-sm flex items-center justify-between gap-2';
+                btn.innerHTML = `<span class="flex-1">${option}</span><span class="key-hint">${index + 1}</span>`;
+                btn.setAttribute('aria-label', `الخيار ${index + 1}: ${option}`);
+                btn.onclick = () => selectAnswer(index, btn);
+                optionsContainer.appendChild(btn);
+            });
+        }
+
+        function selectAnswer(selectedIndex, btnElement) {
+            if (isAnswered) return; // منع النقر المتعدد
+            isAnswered = true;
+
+            const q = shuffledQuestions[currentQuestionIndex];
+            const isCorrect = (selectedIndex === q.answer);
+            const allButtons = document.querySelectorAll('.btn-option');
+
+            // إيقاف تفعيل الأزرار
+            allButtons.forEach(btn => btn.disabled = true);
+
+            if (isCorrect) {
+                score++;
+                updateScoreDisplay();
+                btnElement.classList.add('correct');
+                // تأثير نبض على عداد النقاط
+                const badge = document.getElementById('score-badge');
+                badge.classList.add('pulse-badge');
+                setTimeout(() => badge.classList.remove('pulse-badge'), 900);
+                playSound(true);
+            } else {
+                btnElement.classList.add('wrong', 'shake');
+                playSound(false);
+                // تلوين الإجابة الصحيحة
+                allButtons[q.answer].classList.add('correct');
+            }
+
+            // الانتقال للسؤال التالي بعد ثانية ونصف
+            setTimeout(() => {
+                currentQuestionIndex++;
+                if (currentQuestionIndex < shuffledQuestions.length) {
+                    loadQuestion();
+                } else {
+                    endGame();
+                }
+            }, 1500);
+        }
+
+        function updateScoreDisplay() {
+            document.getElementById('score').innerText = score;
+        }
+
+        function endGame() {
+            document.getElementById('quiz-screen').classList.add('hidden');
+            document.getElementById('quiz-screen').classList.remove('flex');
+            document.getElementById('result-screen').classList.remove('hidden');
+            document.getElementById('result-screen').classList.add('flex');
+
+            document.getElementById('final-score').innerText = score;
+            const messageEl = document.getElementById('result-message');
+            const emojiEl = document.getElementById('result-emoji');
+
+            // حفظ أعلى نتيجة
+            let best = 0;
+            try {
+                best = parseInt(localStorage.getItem('mathHeroesBestScore') || '0', 10) || 0;
+                if (score > best) {
+                    best = score;
+                    localStorage.setItem('mathHeroesBestScore', String(best));
+                }
+            } catch (e) { /* localStorage غير متاح */ }
+            const bestEl = document.getElementById('best-score');
+            if (bestEl) bestEl.innerText = best;
+
+            // رسائل تشجيعية بناءً على الدرجة
+            if (score === 20) {
+                messageEl.innerText = "أنت عبقري في الرياضيات! العلامة الكاملة بامتياز!";
+                emojiEl.innerText = "👑";
+                fireConfetti();
+            } else if (score >= 15) {
+                messageEl.innerText = "عمل رائع يا بطل! أنت ممتاز جداً.";
+                emojiEl.innerText = "🌟";
+                fireConfetti();
+            } else if (score >= 10) {
+                messageEl.innerText = "نتيجة جيدة! حاول مرة أخرى لتصبح الأفضل.";
+                emojiEl.innerText = "👍";
+            } else {
+                messageEl.innerText = "تحتاج إلى مزيد من التدريب على جدول الضرب، أنت تستطيع!";
+                emojiEl.innerText = "💪";
+            }
+        }
+
+        function restartGame() {
+            startGame();
+        }
+
+        // دعم اختصارات لوحة المفاتيح: 1-4 للاختيار، Enter للبدء / إعادة اللعب
+        document.addEventListener('keydown', (e) => {
+            const quizVisible = !document.getElementById('quiz-screen').classList.contains('hidden');
+            const startVisible = !document.getElementById('start-screen').classList.contains('hidden');
+            const resultVisible = !document.getElementById('result-screen').classList.contains('hidden');
+
+            if (quizVisible && !isAnswered) {
+                const num = parseInt(e.key, 10);
+                if (num >= 1 && num <= 4) {
+                    const buttons = document.querySelectorAll('#options-container .btn-option');
+                    if (buttons[num - 1]) buttons[num - 1].click();
+                }
+            } else if (e.key === 'Enter') {
+                if (startVisible) startGame();
+                else if (resultVisible) restartGame();
+            }
+        });
+
+        // تأثير الاحتفال (الورق المتناثر)
+        function fireConfetti() {
+            var duration = 3 * 1000;
+            var animationEnd = Date.now() + duration;
+            var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+
+            function randomInRange(min, max) {
+                return Math.random() * (max - min) + min;
+            }
+
+            var interval = setInterval(function() {
+                var timeLeft = animationEnd - Date.now();
+
+                if (timeLeft <= 0) {
+                    return clearInterval(interval);
+                }
+
+                var particleCount = 50 * (timeLeft / duration);
+                confetti(Object.assign({}, defaults, { particleCount,
+                    origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }
+                }));
+                confetti(Object.assign({}, defaults, { particleCount,
+                    origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }
+                }));
+            }, 250);
+        }
+    </script>
+</body>
+</html>
